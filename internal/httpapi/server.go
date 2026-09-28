@@ -7,39 +7,51 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
-	api "github.com/BeganovR/Golang-BeganovR/internal/generated"
+	"github.com/BeganovR/Golang-BeganovR/api"
 	"github.com/BeganovR/Golang-BeganovR/internal/postgres"
 )
 
 var _ api.ServerInterface = (*Server)(nil)
 
+type Pinger interface {
+	Ping(ctx context.Context) error
+}
+
 type Deps struct {
-	Pool         *pgxpool.Pool
-	TxManager    postgres.TxManager
-	Trips        *postgres.TripRepository
-	History      *postgres.StatusHistoryRepository
-	QueryTimeout time.Duration
-	Logger       *slog.Logger
+	Pinger         Pinger
+	TxManager      postgres.TxManager
+	Trips          *postgres.TripRepository
+	History        *postgres.StatusHistoryRepository
+	Keys           *postgres.IdempotencyRepository
+	QueryTimeout   time.Duration
+	IdempotencyTTL time.Duration
+	Logger         *slog.Logger
 }
 
 type Server struct {
-	pool           *pgxpool.Pool
+	pinger         Pinger
 	txm            postgres.TxManager
 	trips          *postgres.TripRepository
 	history        *postgres.StatusHistoryRepository
+	keys           *postgres.IdempotencyRepository
 	queryTimeout   time.Duration
+	idempotencyTTL time.Duration
 	logger         *slog.Logger
 	tripDataSchema *openapi3.Schema
 }
 
 func NewServer(d Deps) (*Server, error) {
-	swagger, err := api.GetSwagger()
+	registerUUIDFormat.Do(func() {
+		openapi3.DefineStringFormatValidator("uuid", openapi3.NewRegexpFormatValidator(canonicalUUIDPattern))
+	})
+
+	swagger, err := api.GetSpec()
 	if err != nil {
 		return nil, fmt.Errorf("load embedded openapi spec: %w", err)
 	}
@@ -50,11 +62,13 @@ func NewServer(d Deps) (*Server, error) {
 	}
 
 	return &Server{
-		pool:           d.Pool,
+		pinger:         d.Pinger,
 		txm:            d.TxManager,
 		trips:          d.Trips,
 		history:        d.History,
+		keys:           d.Keys,
 		queryTimeout:   d.QueryTimeout,
+		idempotencyTTL: d.IdempotencyTTL,
 		logger:         d.Logger,
 		tripDataSchema: tripData.Value,
 	}, nil
@@ -66,11 +80,31 @@ func (s *Server) Handler() http.Handler {
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		s.writeProblem(w, r, problemNotFound)
 	})
+	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Allow", strings.Join(allowedMethods(router, r.URL.Path), ", "))
+		s.writeProblem(w, r, problemMethodNotAllowed)
+	})
 
 	return api.HandlerWithOptions(s, api.ChiServerOptions{
 		BaseRouter:       router,
+		Middlewares:      []api.MiddlewareFunc{s.requireCanonicalUUIDs},
 		ErrorHandlerFunc: s.handleBindError,
 	})
+}
+
+func allowedMethods(routes chi.Routes, path string) []string {
+	methods := []string{
+		http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodPatch, http.MethodDelete, http.MethodOptions,
+	}
+
+	var allowed []string
+	for _, method := range methods {
+		if routes.Match(chi.NewRouteContext(), method, path) {
+			allowed = append(allowed, method)
+		}
+	}
+	return allowed
 }
 
 func (s *Server) withQueryTimeout(ctx context.Context) (context.Context, context.CancelFunc) {

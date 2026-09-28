@@ -21,6 +21,11 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
+
 	err := run(ctx)
 	stop()
 
@@ -46,6 +51,7 @@ func run(ctx context.Context) error {
 	poolCfg.MaxConns = cfg.DatabaseMaxConns
 	poolCfg.MinConns = cfg.DatabaseMinConns
 	poolCfg.MaxConnLifetime = cfg.DatabaseMaxConnLifetime
+	poolCfg.ConnConfig.ConnectTimeout = cfg.DatabaseConnectTimeout
 
 	connectCtx, cancel := context.WithTimeout(ctx, cfg.DatabaseConnectTimeout)
 	defer cancel()
@@ -61,13 +67,31 @@ func run(ctx context.Context) error {
 	}
 	logger.Info("database ping ok")
 
+	keys := postgres.NewIdempotencyRepository(pool)
+
+	purger := postgres.NewIdempotencyPurger(
+		keys, cfg.IdempotencyKeyTTL, cfg.IdempotencyPurgeInterval, cfg.DatabaseQueryTimeout, logger,
+	)
+	purgerCtx, stopPurger := context.WithCancel(ctx)
+	purgerDone := make(chan struct{})
+	go func() {
+		defer close(purgerDone)
+		purger.Run(purgerCtx)
+	}()
+	defer func() {
+		stopPurger()
+		<-purgerDone
+	}()
+
 	srv, err := httpapi.NewServer(httpapi.Deps{
-		Pool:         pool,
-		TxManager:    postgres.NewManager(pool),
-		Trips:        postgres.NewTripRepository(pool),
-		History:      postgres.NewStatusHistoryRepository(pool),
-		QueryTimeout: cfg.DatabaseQueryTimeout,
-		Logger:       logger,
+		Pinger:         pool,
+		TxManager:      postgres.NewManager(pool),
+		Trips:          postgres.NewTripRepository(pool),
+		History:        postgres.NewStatusHistoryRepository(pool),
+		Keys:           keys,
+		QueryTimeout:   cfg.DatabaseQueryTimeout,
+		IdempotencyTTL: cfg.IdempotencyKeyTTL,
+		Logger:         logger,
 	})
 	if err != nil {
 		return fmt.Errorf("create http api: %w", err)
@@ -80,6 +104,7 @@ func run(ctx context.Context) error {
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,
 		IdleTimeout:       cfg.HTTPIdleTimeout,
+		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}
 
 	serverErr := make(chan error, 1)
@@ -101,6 +126,7 @@ func run(ctx context.Context) error {
 	defer shutdownCancel()
 
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		_ = httpServer.Close()
 		return fmt.Errorf("graceful shutdown: %w", err)
 	}
 	logger.Info("shutdown complete")

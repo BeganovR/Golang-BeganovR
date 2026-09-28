@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	api "github.com/BeganovR/Golang-BeganovR/internal/generated"
+	"github.com/BeganovR/Golang-BeganovR/api"
 )
 
 const (
@@ -49,6 +49,20 @@ var (
 		title:  "Driver busy",
 		detail: "Driver already has an active trip",
 		code:   "driver_busy",
+	}
+	problemIdempotencyConflict = problemSpec{
+		status: http.StatusConflict,
+		slug:   "idempotency-conflict",
+		title:  "Idempotency conflict",
+		detail: "Idempotency-Key was already used with a different request body",
+		code:   "idempotency_conflict",
+	}
+	problemMethodNotAllowed = problemSpec{
+		status: http.StatusMethodNotAllowed,
+		slug:   "method-not-allowed",
+		title:  "Method not allowed",
+		detail: "Method is not allowed for this resource",
+		code:   "method_not_allowed",
 	}
 	problemNotFound = problemSpec{
 		status: http.StatusNotFound,

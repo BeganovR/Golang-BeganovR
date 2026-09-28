@@ -4,9 +4,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/oapi-codegen/nullable"
 
+	"github.com/BeganovR/Golang-BeganovR/api"
 	"github.com/BeganovR/Golang-BeganovR/internal/domain"
-	api "github.com/BeganovR/Golang-BeganovR/internal/generated"
 )
 
 func newTrip(id uuid.UUID, data api.TripData, startedAt time.Time) domain.Trip {
@@ -24,14 +25,22 @@ func newTrip(id uuid.UUID, data api.TripData, startedAt time.Time) domain.Trip {
 
 func toAPITrip(t domain.Trip) api.Trip {
 	return api.Trip{
-		Id:         t.ID,
-		UserId:     t.UserID,
-		DriverId:   t.DriverID,
-		StartPoint: api.Coordinates{Latitude: t.StartPoint.Latitude, Longitude: t.StartPoint.Longitude},
-		EndPoint:   api.Coordinates{Latitude: t.EndPoint.Latitude, Longitude: t.EndPoint.Longitude},
-		Price:      t.Price,
-		Status:     api.TripStatus(t.Status),
-		StartedAt:  t.StartedAt,
-		FinishedAt: t.FinishedAt,
+		Id:             t.ID,
+		UserId:         t.UserID,
+		DriverId:       t.DriverID,
+		StartPoint:     api.Coordinates{Latitude: t.StartPoint.Latitude, Longitude: t.StartPoint.Longitude},
+		EndPoint:       api.Coordinates{Latitude: t.EndPoint.Latitude, Longitude: t.EndPoint.Longitude},
+		Price:          t.Price,
+		Status:         api.TripStatus(t.Status),
+		StartedAt:      t.StartedAt,
+		FinishedAt:     nullableTime(t.FinishedAt),
+		LastPositionAt: nullable.NewNullNullable[time.Time](),
 	}
+}
+
+func nullableTime(t *time.Time) nullable.Nullable[time.Time] {
+	if t == nil {
+		return nullable.NewNullNullable[time.Time]()
+	}
+	return nullable.NewNullableWithValue(*t)
 }

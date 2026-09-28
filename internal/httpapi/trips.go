@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/BeganovR/Golang-BeganovR/api"
 	"github.com/BeganovR/Golang-BeganovR/internal/domain"
-	api "github.com/BeganovR/Golang-BeganovR/internal/generated"
 )
 
 const tripsPath = "/api/v1/trips"
@@ -18,7 +18,7 @@ func now() time.Time {
 	return time.Now().UTC().Truncate(time.Microsecond)
 }
 
-func (s *Server) CreateTrip(w http.ResponseWriter, r *http.Request, _ api.CreateTripParams) {
+func (s *Server) CreateTrip(w http.ResponseWriter, r *http.Request, params api.CreateTripParams) {
 	data, err := s.decodeTripData(w, r)
 	if err != nil {
 		s.writeError(w, r, err)
@@ -30,24 +30,61 @@ func (s *Server) CreateTrip(w http.ResponseWriter, r *http.Request, _ api.Create
 		s.writeError(w, r, fmt.Errorf("generate trip id: %w", err))
 		return
 	}
-	trip := newTrip(id, data, now())
 
 	ctx, cancel := s.withQueryTimeout(r.Context())
 	defer cancel()
 
-	err = s.txm.Do(ctx, func(ctx context.Context) error {
-		if err := s.trips.Create(ctx, trip); err != nil {
-			return err
-		}
-		return s.history.Add(ctx, trip.ID, nil, domain.TripStatusActive, "trip created")
-	})
+	trip, replayed, err := s.saveTrip(ctx, params.IdempotencyKey, data, newTrip(id, data, now()))
 	if err != nil {
 		s.writeError(w, r, err)
 		return
 	}
 
+	status := http.StatusCreated
+	if replayed {
+		status = http.StatusOK
+	}
 	w.Header().Set("Location", tripsPath+"/"+trip.ID.String())
-	s.writeJSON(w, r, http.StatusCreated, toAPITrip(trip))
+	s.writeJSON(w, r, status, toAPITrip(trip))
+}
+
+func (s *Server) saveTrip(
+	ctx context.Context,
+	key *api.IdempotencyKey,
+	data api.TripData,
+	trip domain.Trip,
+) (domain.Trip, bool, error) {
+	var requestHash []byte
+	if key != nil {
+		var err error
+		if requestHash, err = hashTripData(data); err != nil {
+			return domain.Trip{}, false, err
+		}
+	}
+
+	saved, replayed := trip, false
+	err := s.txm.Do(ctx, func(ctx context.Context) error {
+		if key != nil {
+			claimed, err := s.keys.Claim(ctx, *key, requestHash, trip.ID, s.idempotencyTTL)
+			if err != nil {
+				return err
+			}
+			if !claimed {
+				existing, err := s.replayTrip(ctx, *key, requestHash)
+				if err != nil {
+					return err
+				}
+				saved, replayed = existing, true
+				return nil
+			}
+		}
+
+		if err := s.trips.Create(ctx, trip); err != nil {
+			return err
+		}
+		return s.history.Add(ctx, trip.ID, nil, domain.TripStatusActive, "trip created")
+	})
+	return saved, replayed, err
 }
 
 func (s *Server) GetTrip(w http.ResponseWriter, r *http.Request, tripId api.TripId) {

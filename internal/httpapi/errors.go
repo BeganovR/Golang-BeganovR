@@ -21,6 +21,8 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		s.writeProblem(w, r, problemTripCompleted)
 	case errors.Is(err, domain.ErrDriverBusy):
 		s.writeProblem(w, r, problemDriverBusy)
+	case errors.Is(err, domain.ErrIdempotencyConflict):
+		s.writeProblem(w, r, problemIdempotencyConflict)
 	default:
 		s.logger.ErrorContext(r.Context(), "request failed",
 			"method", r.Method, "path", r.URL.Path, "error", err)

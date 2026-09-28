@@ -31,8 +31,14 @@ type Trip struct {
 	FinishedAt *time.Time
 }
 
+type IdempotencyRecord struct {
+	RequestHash []byte
+	TripID      uuid.UUID
+}
+
 var (
-	ErrTripNotFound  = errors.New("trip not found")
-	ErrTripCompleted = errors.New("trip already completed")
-	ErrDriverBusy    = errors.New("driver already has an active trip")
+	ErrTripNotFound        = errors.New("trip not found")
+	ErrTripCompleted       = errors.New("trip already completed")
+	ErrDriverBusy          = errors.New("driver already has an active trip")
+	ErrIdempotencyConflict = errors.New("idempotency key was used with a different request")
 )

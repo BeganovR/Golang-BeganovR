@@ -16,6 +16,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/nullable"
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -88,10 +89,10 @@ type Trip struct {
 	DriverId openapi_types.UUID `json:"driver_id"`
 
 	// EndPoint Географические координаты WGS 84.
-	EndPoint       Coordinates        `json:"end_point"`
-	FinishedAt     *time.Time         `json:"finished_at,omitempty"`
-	Id             openapi_types.UUID `json:"id"`
-	LastPositionAt *time.Time         `json:"last_position_at,omitempty"`
+	EndPoint       Coordinates                  `json:"end_point"`
+	FinishedAt     nullable.Nullable[time.Time] `json:"finished_at,omitempty"`
+	Id             openapi_types.UUID           `json:"id"`
+	LastPositionAt nullable.Nullable[time.Time] `json:"last_position_at,omitempty"`
 
 	// Price Стоимость поездки в целых рублях. Это учебное упрощение: копейки не используются.
 	//

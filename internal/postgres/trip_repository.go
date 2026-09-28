@@ -114,7 +114,7 @@ func scanTrip(row pgx.Row) (domain.Trip, error) {
 		&t.Price, &t.Status, &t.StartedAt, &t.FinishedAt,
 	)
 	if err != nil {
-		return domain.Trip{}, err
+		return domain.Trip{}, fmt.Errorf("scan trip: %w", err)
 	}
 
 	t.StartedAt = t.StartedAt.UTC()
