@@ -12,7 +12,7 @@ require-database-url:
 
 generate:
 	go tool oapi-codegen \
-		-generate types,chi-server \
+		-generate types,chi-server,spec \
 		-package api \
 		-include-operation-ids createTrip,getTrip,finishTrip,health,ready \
 		-o internal/generated/api.gen.go \

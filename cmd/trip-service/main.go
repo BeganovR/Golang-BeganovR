@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,39 +10,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/BeganovR/Golang-BeganovR/internal/config"
-	api "github.com/BeganovR/Golang-BeganovR/internal/generated"
+	"github.com/BeganovR/Golang-BeganovR/internal/httpapi"
+	"github.com/BeganovR/Golang-BeganovR/internal/postgres"
 )
-
-type server struct {
-	api.Unimplemented
-	db  *pgxpool.Pool
-	cfg config.Config
-}
-
-func (s *server) Health(w http.ResponseWriter, r *http.Request) {
-	writeHealth(w, http.StatusOK, api.Ok)
-}
-
-func (s *server) Ready(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.DatabaseQueryTimeout)
-	defer cancel()
-
-	if err := s.db.Ping(ctx); err != nil {
-		writeHealth(w, http.StatusServiceUnavailable, api.Unavailable)
-		return
-	}
-	writeHealth(w, http.StatusOK, api.Ok)
-}
-
-func writeHealth(w http.ResponseWriter, status int, s api.HealthResponseStatus) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(api.HealthResponse{Status: s})
-}
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
@@ -89,10 +61,21 @@ func run(ctx context.Context) error {
 	}
 	logger.Info("database ping ok")
 
-	srv := &server{db: pool, cfg: cfg}
+	srv, err := httpapi.NewServer(httpapi.Deps{
+		Pool:         pool,
+		TxManager:    postgres.NewManager(pool),
+		Trips:        postgres.NewTripRepository(pool),
+		History:      postgres.NewStatusHistoryRepository(pool),
+		QueryTimeout: cfg.DatabaseQueryTimeout,
+		Logger:       logger,
+	})
+	if err != nil {
+		return fmt.Errorf("create http api: %w", err)
+	}
+
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.HandlerFromMux(srv, chi.NewRouter()),
+		Handler:           srv.Handler(),
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,
