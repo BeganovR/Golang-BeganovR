@@ -42,3 +42,7 @@ var (
 	ErrDriverBusy          = errors.New("driver already has an active trip")
 	ErrIdempotencyConflict = errors.New("idempotency key was used with a different request")
 )
+
+func Now() time.Time {
+	return time.Now().UTC().Truncate(time.Microsecond)
+}

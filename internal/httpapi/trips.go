@@ -1,10 +1,8 @@
 package httpapi
 
 import (
-	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -13,10 +11,6 @@ import (
 )
 
 const tripsPath = "/api/v1/trips"
-
-func now() time.Time {
-	return time.Now().UTC().Truncate(time.Microsecond)
-}
 
 func (s *Server) CreateTrip(w http.ResponseWriter, r *http.Request, params api.CreateTripParams) {
 	data, err := s.decodeTripData(w, r)
@@ -31,10 +25,18 @@ func (s *Server) CreateTrip(w http.ResponseWriter, r *http.Request, params api.C
 		return
 	}
 
+	var requestHash []byte
+	if params.IdempotencyKey != nil {
+		if requestHash, err = hashTripData(data); err != nil {
+			s.writeError(w, r, err)
+			return
+		}
+	}
+
 	ctx, cancel := s.withQueryTimeout(r.Context())
 	defer cancel()
 
-	trip, replayed, err := s.saveTrip(ctx, params.IdempotencyKey, data, newTrip(id, data, now()))
+	trip, replayed, err := s.svc.CreateTrip(ctx, params.IdempotencyKey, requestHash, newTrip(id, data, domain.Now()))
 	if err != nil {
 		s.writeError(w, r, err)
 		return
@@ -48,50 +50,11 @@ func (s *Server) CreateTrip(w http.ResponseWriter, r *http.Request, params api.C
 	s.writeJSON(w, r, status, toAPITrip(trip))
 }
 
-func (s *Server) saveTrip(
-	ctx context.Context,
-	key *api.IdempotencyKey,
-	data api.TripData,
-	trip domain.Trip,
-) (domain.Trip, bool, error) {
-	var requestHash []byte
-	if key != nil {
-		var err error
-		if requestHash, err = hashTripData(data); err != nil {
-			return domain.Trip{}, false, err
-		}
-	}
-
-	saved, replayed := trip, false
-	err := s.txm.Do(ctx, func(ctx context.Context) error {
-		if key != nil {
-			claimed, err := s.keys.Claim(ctx, *key, requestHash, trip.ID, s.idempotencyTTL)
-			if err != nil {
-				return err
-			}
-			if !claimed {
-				existing, err := s.replayTrip(ctx, *key, requestHash)
-				if err != nil {
-					return err
-				}
-				saved, replayed = existing, true
-				return nil
-			}
-		}
-
-		if err := s.trips.Create(ctx, trip); err != nil {
-			return err
-		}
-		return s.history.Add(ctx, trip.ID, nil, domain.TripStatusActive, "trip created")
-	})
-	return saved, replayed, err
-}
-
 func (s *Server) GetTrip(w http.ResponseWriter, r *http.Request, tripId api.TripId) {
 	ctx, cancel := s.withQueryTimeout(r.Context())
 	defer cancel()
 
-	trip, err := s.trips.GetByID(ctx, tripId)
+	trip, err := s.svc.GetTrip(ctx, tripId)
 	if err != nil {
 		s.writeError(w, r, err)
 		return
@@ -103,17 +66,7 @@ func (s *Server) FinishTrip(w http.ResponseWriter, r *http.Request, tripId api.T
 	ctx, cancel := s.withQueryTimeout(r.Context())
 	defer cancel()
 
-	var trip domain.Trip
-	err := s.txm.Do(ctx, func(ctx context.Context) error {
-		finished, err := s.trips.Finish(ctx, tripId, now())
-		if err != nil {
-			return err
-		}
-		trip = finished
-
-		from := domain.TripStatusActive
-		return s.history.Add(ctx, trip.ID, &from, domain.TripStatusCompleted, "trip finished")
-	})
+	trip, err := s.svc.FinishTrip(ctx, tripId)
 	if err != nil {
 		s.writeError(w, r, err)
 		return

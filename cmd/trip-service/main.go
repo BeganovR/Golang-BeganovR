@@ -15,6 +15,7 @@ import (
 	"github.com/BeganovR/Golang-BeganovR/internal/config"
 	"github.com/BeganovR/Golang-BeganovR/internal/httpapi"
 	"github.com/BeganovR/Golang-BeganovR/internal/postgres"
+	"github.com/BeganovR/Golang-BeganovR/internal/service"
 )
 
 func main() {
@@ -83,15 +84,19 @@ func run(ctx context.Context) error {
 		<-purgerDone
 	}()
 
+	svc := service.New(
+		postgres.NewManager(pool),
+		postgres.NewTripRepository(pool),
+		postgres.NewStatusHistoryRepository(pool),
+		keys,
+		cfg.IdempotencyKeyTTL,
+	)
+
 	srv, err := httpapi.NewServer(httpapi.Deps{
-		Pinger:         pool,
-		TxManager:      postgres.NewManager(pool),
-		Trips:          postgres.NewTripRepository(pool),
-		History:        postgres.NewStatusHistoryRepository(pool),
-		Keys:           keys,
-		QueryTimeout:   cfg.DatabaseQueryTimeout,
-		IdempotencyTTL: cfg.IdempotencyKeyTTL,
-		Logger:         logger,
+		Pinger:       pool,
+		Service:      svc,
+		QueryTimeout: cfg.DatabaseQueryTimeout,
+		Logger:       logger,
 	})
 	if err != nil {
 		return fmt.Errorf("create http api: %w", err)

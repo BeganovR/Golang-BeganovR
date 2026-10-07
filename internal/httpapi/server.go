@@ -14,34 +14,21 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/BeganovR/Golang-BeganovR/api"
-	"github.com/BeganovR/Golang-BeganovR/internal/postgres"
 )
 
 var _ api.ServerInterface = (*Server)(nil)
 
-type Pinger interface {
-	Ping(ctx context.Context) error
-}
-
 type Deps struct {
-	Pinger         Pinger
-	TxManager      postgres.TxManager
-	Trips          *postgres.TripRepository
-	History        *postgres.StatusHistoryRepository
-	Keys           *postgres.IdempotencyRepository
-	QueryTimeout   time.Duration
-	IdempotencyTTL time.Duration
-	Logger         *slog.Logger
+	Pinger       Pinger
+	Service      Service
+	QueryTimeout time.Duration
+	Logger       *slog.Logger
 }
 
 type Server struct {
 	pinger         Pinger
-	txm            postgres.TxManager
-	trips          *postgres.TripRepository
-	history        *postgres.StatusHistoryRepository
-	keys           *postgres.IdempotencyRepository
+	svc            Service
 	queryTimeout   time.Duration
-	idempotencyTTL time.Duration
 	logger         *slog.Logger
 	tripDataSchema *openapi3.Schema
 }
@@ -63,12 +50,8 @@ func NewServer(d Deps) (*Server, error) {
 
 	return &Server{
 		pinger:         d.Pinger,
-		txm:            d.TxManager,
-		trips:          d.Trips,
-		history:        d.History,
-		keys:           d.Keys,
+		svc:            d.Service,
 		queryTimeout:   d.QueryTimeout,
-		idempotencyTTL: d.IdempotencyTTL,
 		logger:         d.Logger,
 		tripDataSchema: tripData.Value,
 	}, nil
