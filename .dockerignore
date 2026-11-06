@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.example
+.tripgo
+.golangci.yml
+oapi-codegen.yaml
+environment.toml
+Makefile
+README.md
+contracts
+migrations
+deploy
+**/*_test.go
