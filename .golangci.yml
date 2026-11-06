@@ -57,6 +57,12 @@ linters:
               desc: домен не строит SQL
             - pkg: go.opentelemetry.io/otel
               desc: домен не знает про телеметрию
+            - pkg: github.com/BeganovR/Golang-BeganovR/api
+              desc: домен не знает про API
+            - pkg: github.com/BeganovR/Golang-BeganovR/internal/infra
+              desc: домен не знает про инфраструктуру
+            - pkg: github.com/BeganovR/Golang-BeganovR/internal/repository
+              desc: домен не знает про хранение
         usecase:
           files:
             - "**/internal/usecase/**"
@@ -69,6 +75,21 @@ linters:
               desc: usecase работает через интерфейсы, а не через драйвер бд
             - pkg: github.com/Masterminds/squirrel
               desc: usecase не строит SQL
+            - pkg: github.com/BeganovR/Golang-BeganovR/api
+              desc: usecase не знает про API
+            - pkg: github.com/BeganovR/Golang-BeganovR/internal/infra
+              desc: usecase получает инфраструктуру через интерфейсы
+            - pkg: github.com/BeganovR/Golang-BeganovR/internal/repository
+              desc: usecase получает хранилище через интерфейсы
+        http:
+          files:
+            - "**/internal/http/**"
+            - "!**/*_test.go"
+          deny:
+            - pkg: github.com/BeganovR/Golang-BeganovR/internal/repository
+              desc: транспорт не знает про хранилище
+            - pkg: github.com/BeganovR/Golang-BeganovR/internal/infra
+              desc: транспорт не создаёт инфраструктуру
 
     # Запрещает обращения через идентификатор с подчёркиванием, поэтому пакеты
     # называем без snake_case: internal/adapter/http, а не internal/adapter/http_server.
