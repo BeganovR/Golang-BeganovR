@@ -49,20 +49,14 @@
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 43,
-                "column": 16
-              },
-              {
-                "type": "CONDITIONALS_NEGATION",
-                "status": "KILLED",
                 "line": 40,
                 "column": 14
               },
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 54,
-                "column": 90
+                "line": 43,
+                "column": 16
               },
               {
                 "type": "CONDITIONALS_BOUNDARY",
@@ -71,10 +65,10 @@
                 "column": 90
               },
               {
-                "type": "ARITHMETIC_BASE",
+                "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
                 "line": 54,
-                "column": 92
+                "column": 90
               },
               {
                 "type": "INVERT_NEGATIVES",
@@ -83,10 +77,10 @@
                 "column": 92
               },
               {
-                "type": "CONDITIONALS_BOUNDARY",
+                "type": "ARITHMETIC_BASE",
                 "status": "KILLED",
                 "line": 54,
-                "column": 116
+                "column": 92
               },
               {
                 "type": "ARITHMETIC_BASE",
@@ -95,16 +89,16 @@
                 "column": 43
               },
               {
-                "type": "CONDITIONALS_NEGATION",
+                "type": "CONDITIONALS_BOUNDARY",
                 "status": "KILLED",
                 "line": 54,
                 "column": 116
               },
               {
-                "type": "ARITHMETIC_BASE",
+                "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 57,
-                "column": 95
+                "line": 54,
+                "column": 116
               },
               {
                 "type": "CONDITIONALS_BOUNDARY",
@@ -113,13 +107,19 @@
                 "column": 93
               },
               {
+                "type": "INVERT_NEGATIVES",
+                "status": "KILLED",
+                "line": 57,
+                "column": 95
+              },
+              {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
                 "line": 57,
                 "column": 93
               },
               {
-                "type": "INVERT_NEGATIVES",
+                "type": "ARITHMETIC_BASE",
                 "status": "KILLED",
                 "line": 57,
                 "column": 95
@@ -131,13 +131,13 @@
                 "column": 43
               },
               {
-                "type": "CONDITIONALS_NEGATION",
+                "type": "CONDITIONALS_BOUNDARY",
                 "status": "KILLED",
                 "line": 57,
                 "column": 121
               },
               {
-                "type": "CONDITIONALS_BOUNDARY",
+                "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
                 "line": 57,
                 "column": 121
@@ -170,7 +170,7 @@
         "mutants_lived": 0,
         "mutants_not_viable": 0,
         "mutants_not_covered": 0,
-        "elapsed_time": 3.553802927,
+        "elapsed_time": 2.299839565,
         "mutator_statistics": {
           "arithmetic_base": 6,
           "conditionals_negation": 8,
@@ -190,61 +190,61 @@
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 48,
+                "line": 49,
                 "column": 10
               },
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 39,
-                "column": 9
-              },
-              {
-                "type": "CONDITIONALS_NEGATION",
-                "status": "KILLED",
-                "line": 35,
+                "line": 36,
                 "column": 34
               },
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 50,
+                "line": 51,
                 "column": 11
               },
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 65,
+                "line": 40,
+                "column": 9
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 66,
                 "column": 91
               },
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 55,
-                "column": 12
-              },
-              {
-                "type": "CONDITIONALS_NEGATION",
-                "status": "KILLED",
-                "line": 62,
+                "line": 63,
                 "column": 45
               },
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 70,
+                "line": 71,
                 "column": 9
               },
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 82,
+                "line": 56,
+                "column": 12
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 90,
                 "column": 9
               },
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 89,
+                "line": 83,
                 "column": 9
               }
             ]
@@ -257,7 +257,7 @@
         "mutants_lived": 0,
         "mutants_not_viable": 0,
         "mutants_not_covered": 0,
-        "elapsed_time": 2.862937594,
+        "elapsed_time": 1.494494773,
         "mutator_statistics": {
           "conditionals_negation": 10
         }
@@ -287,7 +287,7 @@
         "mutants_lived": 0,
         "mutants_not_viable": 0,
         "mutants_not_covered": 0,
-        "elapsed_time": 0.575597372,
+        "elapsed_time": 0.422807861,
         "mutator_statistics": {
           "conditionals_negation": 1
         }
@@ -304,31 +304,31 @@
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 40,
+                "line": 42,
                 "column": 91
               },
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 36,
+                "line": 38,
                 "column": 10
               },
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 32,
-                "column": 45
-              },
-              {
-                "type": "CONDITIONALS_NEGATION",
-                "status": "KILLED",
-                "line": 29,
+                "line": 31,
                 "column": 10
               },
               {
                 "type": "CONDITIONALS_NEGATION",
                 "status": "KILLED",
-                "line": 45,
+                "line": 34,
+                "column": 42
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 47,
                 "column": 9
               }
             ]
@@ -341,7 +341,7 @@
         "mutants_lived": 0,
         "mutants_not_viable": 0,
         "mutants_not_covered": 0,
-        "elapsed_time": 1.534870698,
+        "elapsed_time": 0.945939037,
         "mutator_statistics": {
           "conditionals_negation": 5
         }

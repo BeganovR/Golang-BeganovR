@@ -20,14 +20,15 @@ type Usecase struct {
 	idempotencyTTL time.Duration
 	logger         *slog.Logger
 	metrics        metrics
+	now            func() time.Time
 }
 
 func New(txm txManager, trips tripRepository, history historyRepository, keys idempotencyRepository,
-	idempotencyTTL time.Duration, logger *slog.Logger, metrics metrics,
+	idempotencyTTL time.Duration, logger *slog.Logger, metrics metrics, now func() time.Time,
 ) *Usecase {
 	return &Usecase{
 		txm: txm, trips: trips, history: history, keys: keys,
-		idempotencyTTL: idempotencyTTL, logger: logger, metrics: metrics,
+		idempotencyTTL: idempotencyTTL, logger: logger, metrics: metrics, now: now,
 	}
 }
 
@@ -41,7 +42,7 @@ func (u *Usecase) Execute(ctx context.Context, key *uuid.UUID, requestHash []byt
 	}
 	input.ID = id
 	input.Status = trip.TripStatusActive
-	input.StartedAt = trip.Now()
+	input.StartedAt = u.now().UTC().Truncate(time.Microsecond)
 	input.FinishedAt = nil
 	saved, replayed := input, false
 	err = u.txm.Do(ctx, func(ctx context.Context) error {

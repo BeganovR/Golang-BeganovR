@@ -1,3 +1,5 @@
+//go:generate go tool mockgen -destination=mocks_test.go -package=middleware_test net/http ResponseWriter
+
 package middleware_test
 
 import (
@@ -14,32 +16,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.uber.org/mock/gomock"
 
 	"github.com/BeganovR/Golang-BeganovR/internal/http/response"
 )
 
 const privateWriteDetails = "private transport details"
-
-type failedResponseWriter struct {
-	header      http.Header
-	status      int
-	headerCalls int
-	writeCalls  int
-}
-
-func (w *failedResponseWriter) Header() http.Header {
-	return w.header
-}
-
-func (w *failedResponseWriter) WriteHeader(status int) {
-	w.status = status
-	w.headerCalls++
-}
-
-func (w *failedResponseWriter) Write([]byte) (int, error) {
-	w.writeCalls++
-	return 0, fmt.Errorf("%s: %w", privateWriteDetails, io.ErrClosedPipe)
-}
 
 func TestResponseWriteFailureSignals(t *testing.T) {
 	t.Parallel()
@@ -56,11 +38,13 @@ func TestResponseWriteFailureSignals(t *testing.T) {
 				response.JSON(w, r, status, map[string]string{"result": "ok"})
 			})
 			f := newSignals(t, router)
-			writer := &failedResponseWriter{header: make(http.Header)}
+			writer := NewMockResponseWriter(gomock.NewController(t))
+			writer.EXPECT().Header().Return(make(http.Header)).AnyTimes()
+			gomock.InOrder(
+				writer.EXPECT().WriteHeader(status),
+				writer.EXPECT().Write(gomock.Any()).Return(0, fmt.Errorf("%s: %w", privateWriteDetails, io.ErrClosedPipe)),
+			)
 			f.handler.ServeHTTP(writer, httptest.NewRequest(http.MethodPost, tripPath, nil))
-			if writer.status != status || writer.headerCalls != 1 || writer.writeCalls != 1 {
-				t.Fatalf("response status=%d headers=%d writes=%d; want %d, 1, 1", writer.status, writer.headerCalls, writer.writeCalls, status)
-			}
 			level := "INFO"
 			if status == http.StatusInternalServerError {
 				level = "ERROR"
@@ -99,11 +83,10 @@ func TestResponseEncodingFailureSignals(t *testing.T) {
 		response.JSON(w, r, http.StatusOK, math.NaN())
 	})
 	f := newSignals(t, router)
-	writer := &failedResponseWriter{header: make(http.Header)}
+	writer := NewMockResponseWriter(gomock.NewController(t))
+	writer.EXPECT().Header().Return(make(http.Header)).AnyTimes()
+	writer.EXPECT().WriteHeader(http.StatusOK)
 	f.handler.ServeHTTP(writer, httptest.NewRequest(http.MethodGet, tripPath, nil))
-	if writer.status != http.StatusOK || writer.headerCalls != 1 || writer.writeCalls != 0 {
-		t.Fatalf("response status=%d headers=%d writes=%d; want 200, 1, 0", writer.status, writer.headerCalls, writer.writeCalls)
-	}
 	entry := assertAccessLog(t, f, http.MethodGet, tripRoute, http.StatusOK, "INFO")
 	if writeError, ok := entry["write_error"].(string); !ok || writeError == "" {
 		t.Errorf("encoding error missing from access log: %+v", entry)

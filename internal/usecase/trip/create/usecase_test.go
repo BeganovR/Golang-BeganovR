@@ -25,6 +25,7 @@ type fixture struct {
 	metrics *MockMetrics
 	logs    bytes.Buffer
 	usecase *create.Usecase
+	now     time.Time
 }
 
 const (
@@ -46,9 +47,10 @@ func newFixture(t *testing.T) *fixture {
 	f := &fixture{
 		txm: NewMockTxManager(ctrl), trips: NewMockTripRepository(ctrl),
 		history: NewMockHistoryRepository(ctrl), keys: NewMockIdempotencyRepository(ctrl), metrics: NewMockMetrics(ctrl),
+		now: time.Date(2026, time.November, 10, 12, 34, 56, 123456000, time.UTC),
 	}
 	f.usecase = create.New(f.txm, f.trips, f.history, f.keys, time.Hour,
-		slog.New(slog.NewJSONHandler(&f.logs, nil)), f.metrics)
+		slog.New(slog.NewJSONHandler(&f.logs, nil)), f.metrics, func() time.Time { return f.now })
 	return f
 }
 
@@ -69,10 +71,12 @@ func TestExecuteCreate(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			f := newFixture(t)
+			startedAt := f.now
+			f.now = f.now.In(time.FixedZone("UTC+3", 3*60*60)).Add(789 * time.Nanosecond)
 			ctx, txCtx := context.Background(), t.Context()
 			input := validInput()
 			input.ID, input.Status = uuid.New(), trip.TripStatusCompleted
-			oldFinish := time.Now()
+			oldFinish := f.now.Add(-time.Minute)
 			input.FinishedAt = &oldFinish
 			var key *uuid.UUID
 			hash := []byte("request hash")
@@ -104,7 +108,6 @@ func TestExecuteCreate(t *testing.T) {
 					t.Fatal("TripCreated called before commit")
 				}
 			})
-			before := time.Now().UTC().Truncate(time.Microsecond)
 			got, replayed, err := f.usecase.Execute(ctx, key, hash, input)
 			if err != nil || replayed || !reflect.DeepEqual(got, saved) {
 				t.Fatalf("Execute() = %+v, %v, %v; saved = %+v", got, replayed, err, saved)
@@ -112,8 +115,8 @@ func TestExecuteCreate(t *testing.T) {
 			if got.ID == uuid.Nil || got.ID.Version() != 7 || got.ID == input.ID || got.Status != trip.TripStatusActive || got.FinishedAt != nil {
 				t.Fatalf("generated fields = %+v", got)
 			}
-			if got.StartedAt.Before(before) || got.StartedAt.After(time.Now()) || got.StartedAt.Location() != time.UTC {
-				t.Fatalf("StartedAt = %v", got.StartedAt)
+			if got.StartedAt != startedAt {
+				t.Fatalf("StartedAt = %v, want %v", got.StartedAt, startedAt)
 			}
 			input.ID, input.Status, input.StartedAt, input.FinishedAt = got.ID, got.Status, got.StartedAt, got.FinishedAt
 			if !reflect.DeepEqual(got, input) {

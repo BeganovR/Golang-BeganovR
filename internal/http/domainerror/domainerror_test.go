@@ -43,3 +43,12 @@ func TestProblem(t *testing.T) {
 		})
 	}
 }
+
+func TestValidationProblemDetail(t *testing.T) {
+	t.Parallel()
+	err := fmt.Errorf("private database details: %w", &trip.ValidationError{Field: "price", Message: "must be non-negative"})
+	status, body := domainerror.Problem(err)
+	if status != http.StatusBadRequest || body.Detail == nil || *body.Detail != "price: must be non-negative" {
+		t.Fatalf("validation problem = %d, %+v", status, body)
+	}
+}

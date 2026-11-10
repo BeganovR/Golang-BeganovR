@@ -75,9 +75,9 @@ func New(ctx context.Context, cfg config.Config, version string, logger *slog.Lo
 		return nil, err
 	}
 	api, err := httptransport.NewServer(httptransport.Deps{
-		Create:       create.New(txm, trips, histories, keys, cfg.IdempotencyKeyTTL, logger, metrics),
+		Create:       create.New(txm, trips, histories, keys, cfg.IdempotencyKeyTTL, logger, metrics, time.Now),
 		Get:          get.New(trips),
-		Finish:       finish.New(txm, trips, histories, logger, metrics),
+		Finish:       finish.New(txm, trips, histories, logger, metrics, time.Now),
 		Pinger:       c.pool,
 		QueryTimeout: cfg.DatabaseQueryTimeout,
 	})

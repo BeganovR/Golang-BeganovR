@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -16,10 +17,11 @@ type Usecase struct {
 	history historyRepository
 	logger  *slog.Logger
 	metrics metrics
+	now     func() time.Time
 }
 
-func New(txm txManager, trips tripRepository, history historyRepository, logger *slog.Logger, metrics metrics) *Usecase {
-	return &Usecase{txm: txm, trips: trips, history: history, logger: logger, metrics: metrics}
+func New(txm txManager, trips tripRepository, history historyRepository, logger *slog.Logger, metrics metrics, now func() time.Time) *Usecase {
+	return &Usecase{txm: txm, trips: trips, history: history, logger: logger, metrics: metrics, now: now}
 }
 
 func (u *Usecase) Execute(ctx context.Context, id uuid.UUID) (trip.Trip, error) {
@@ -29,7 +31,7 @@ func (u *Usecase) Execute(ctx context.Context, id uuid.UUID) (trip.Trip, error) 
 		if err != nil {
 			return fmt.Errorf("get trip: %w", err)
 		}
-		if err := current.Finish(trip.Now()); err != nil {
+		if err := current.Finish(u.now()); err != nil {
 			return fmt.Errorf("finish trip: %w", err)
 		}
 		finished, err = u.trips.Finish(ctx, id, *current.FinishedAt)

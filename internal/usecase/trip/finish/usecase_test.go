@@ -24,6 +24,7 @@ type fixture struct {
 	metrics *MockMetrics
 	logs    bytes.Buffer
 	usecase *finish.Usecase
+	now     time.Time
 }
 
 const (
@@ -43,20 +44,23 @@ func newFixture(t *testing.T) *fixture {
 	f := &fixture{
 		txm: NewMockTxManager(ctrl), trips: NewMockTripRepository(ctrl),
 		history: NewMockHistoryRepository(ctrl), metrics: NewMockMetrics(ctrl),
+		now: time.Date(2026, time.November, 10, 12, 34, 56, 123456000, time.UTC),
 	}
 	f.usecase = finish.New(f.txm, f.trips, f.history,
-		slog.New(slog.NewJSONHandler(&f.logs, nil)), f.metrics)
+		slog.New(slog.NewJSONHandler(&f.logs, nil)), f.metrics, func() time.Time { return f.now })
 	return f
 }
 
 func TestExecuteSuccess(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
+	finishedAt := f.now
+	f.now = f.now.In(time.FixedZone("UTC+3", 3*60*60)).Add(789 * time.Nanosecond)
 	ctx, txCtx := context.Background(), t.Context()
 	id := uuid.New()
 	current := trip.Trip{
 		ID: id, UserID: uuid.New(), DriverID: uuid.New(), Price: 100,
-		Status: trip.TripStatusActive, StartedAt: trip.Now().Add(-time.Minute),
+		Status: trip.TripStatusActive, StartedAt: finishedAt.Add(-time.Minute),
 	}
 	var saved trip.Trip
 	committed := false
@@ -66,11 +70,8 @@ func TestExecuteSuccess(t *testing.T) {
 		return err
 	})
 	f.trips.EXPECT().GetByID(txCtx, id).Return(current, nil)
-	f.trips.EXPECT().Finish(txCtx, id, gomock.Any()).
+	f.trips.EXPECT().Finish(txCtx, id, finishedAt).
 		DoAndReturn(func(_ context.Context, _ uuid.UUID, at time.Time) (trip.Trip, error) {
-			if at.Before(current.StartedAt) || at.After(time.Now()) || at.Location() != time.UTC || at.Nanosecond()%1000 != 0 {
-				t.Fatalf("Finish timestamp = %v", at)
-			}
 			saved = current
 			saved.Status, saved.FinishedAt = trip.TripStatusCompleted, &at
 			return saved, nil
@@ -133,7 +134,7 @@ func TestExecuteError(t *testing.T) {
 				if stage == stageFinish || stage == stageConcurrentFinish {
 					finishErr = wantErr
 				}
-				f.trips.EXPECT().Finish(ctx, id, gomock.Any()).Return(trip.Trip{ID: id}, finishErr)
+				f.trips.EXPECT().Finish(ctx, id, f.now).Return(trip.Trip{ID: id}, finishErr)
 			}
 			if stage == stageHistory || stage == stageCommit {
 				var historyErr error

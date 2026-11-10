@@ -17,7 +17,9 @@ var (
 func Problem(err error) (int, api.Problem) {
 	var validation *trip.ValidationError
 	switch {
-	case errors.Is(err, ErrInvalidRequest), errors.As(err, &validation):
+	case errors.As(err, &validation):
+		return problem(http.StatusBadRequest, "invalid-request", "Invalid request", validation.Error(), "invalid_request")
+	case errors.Is(err, ErrInvalidRequest):
 		return problem(http.StatusBadRequest, "invalid-request", "Invalid request", "Request validation failed", "invalid_request")
 	case errors.Is(err, trip.ErrTripNotFound):
 		return problem(http.StatusNotFound, "trip-not-found", "Trip not found", "Trip was not found", "trip_not_found")

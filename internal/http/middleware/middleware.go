@@ -25,11 +25,12 @@ import (
 )
 
 type observation struct {
-	writer   chimiddleware.WrapResponseWriter
-	route    string
-	stack    []byte
-	aborted  bool
-	complete []func()
+	writer     chimiddleware.WrapResponseWriter
+	route      string
+	stack      []byte
+	panicValue string
+	aborted    bool
+	complete   []func()
 }
 
 type observationKey struct{}
@@ -95,6 +96,7 @@ func (m *Middleware) tracing(next http.Handler) http.Handler {
 			status := o.status()
 			if recovered := recover(); recovered != nil {
 				o.stack = debug.Stack()
+				o.panicValue = fmt.Sprint(recovered)
 				span.SetAttributes(attribute.Int("http.response.status_code", http.StatusInternalServerError),
 					attribute.String("error.type", "panic"))
 				span.SetStatus(codes.Error, "panic")
@@ -149,7 +151,7 @@ func (m *Middleware) logging(next http.Handler) http.Handler {
 				attrs = append(attrs, "write_error", err)
 			}
 			if len(o.stack) > 0 {
-				attrs = append(attrs, "stack", string(o.stack))
+				attrs = append(attrs, "stack", string(o.stack), "panic", o.panicValue)
 			}
 			m.logger.Log(r.Context(), level, "request handled", attrs...)
 		})

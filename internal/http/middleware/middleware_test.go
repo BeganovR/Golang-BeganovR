@@ -29,14 +29,15 @@ import (
 )
 
 const (
-	tripRoute       = "/api/v1/trips/{tripId}"
-	tripPath        = "/api/v1/trips/0192e1c7-1234-7123-8123-123456789abc"
-	durationMetric  = "http.server.request.duration"
-	activeMetric    = "http.server.active_requests"
-	methodAttribute = "http.request.method"
-	routeAttribute  = "http.route"
-	statusAttribute = "http.response.status_code"
-	errorAttribute  = "error.type"
+	tripRoute         = "/api/v1/trips/{tripId}"
+	tripPath          = "/api/v1/trips/0192e1c7-1234-7123-8123-123456789abc"
+	durationMetric    = "http.server.request.duration"
+	activeMetric      = "http.server.active_requests"
+	methodAttribute   = "http.request.method"
+	routeAttribute    = "http.route"
+	statusAttribute   = "http.response.status_code"
+	errorAttribute    = "error.type"
+	privatePanicValue = "private panic value"
 )
 
 type signals struct {
@@ -175,11 +176,11 @@ func assertAccessLog(t *testing.T, f *signals, method, route string, status int,
 
 func assertPanicDetailsHidden(t *testing.T, span sdktrace.ReadOnlySpan) {
 	t.Helper()
-	data, err := json.Marshal(map[string]any{"events": span.Events(), "status": span.Status()})
+	data, err := json.Marshal(map[string]any{"attributes": span.Attributes(), "events": span.Events(), "status": span.Status()})
 	if err != nil {
 		t.Fatalf("encode panic span: %v", err)
 	}
-	if strings.Contains(string(data), "private panic value") {
+	if strings.Contains(string(data), privatePanicValue) {
 		t.Fatalf("raw panic value appeared in span: %s", data)
 	}
 }
@@ -276,7 +277,7 @@ func TestPanicRecovery(t *testing.T) {
 	t.Parallel()
 	const panicRoute = "/panic"
 	router := chi.NewRouter()
-	router.Get(panicRoute, func(http.ResponseWriter, *http.Request) { panic("private panic value") })
+	router.Get(panicRoute, func(http.ResponseWriter, *http.Request) { panic(privatePanicValue) })
 	router.Get("/alive", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	f := newSignals(t, router)
 	recorder := httptest.NewRecorder()
@@ -286,10 +287,13 @@ func TestPanicRecovery(t *testing.T) {
 		t.Fatalf("decode panic response: %v", err)
 	}
 	if recorder.Code != http.StatusInternalServerError || problem.Code != "internal_error" ||
-		strings.Contains(recorder.Body.String(), "private panic value") {
+		strings.Contains(recorder.Body.String(), privatePanicValue) {
 		t.Fatalf("panic response = %d %s", recorder.Code, recorder.Body.String())
 	}
 	entry := assertAccessLog(t, f, http.MethodGet, panicRoute, http.StatusInternalServerError, "ERROR")
+	if entry["panic"] != privatePanicValue {
+		t.Fatalf("panic value = %v", entry["panic"])
+	}
 	if stack, ok := entry["stack"].(string); !ok || !strings.Contains(stack, "middleware_test.TestPanicRecovery") {
 		t.Fatalf("panic stack = %v", entry["stack"])
 	}
@@ -308,6 +312,35 @@ func TestPanicRecovery(t *testing.T) {
 	f.handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/alive", nil))
 	if recorder.Code != http.StatusNoContent || len(f.entries(t)) != 2 || len(f.spans.Ended()) != 2 {
 		t.Fatal("service did not handle the next request after panic")
+	}
+}
+
+func TestPanicValuesLogged(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{name: "error", value: errors.New(privatePanicValue), want: privatePanicValue},
+		{name: "empty string", value: "", want: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			router := chi.NewRouter()
+			router.Get(tripRoute, func(http.ResponseWriter, *http.Request) { panic(tc.value) })
+			f := newSignals(t, router)
+			recorder := httptest.NewRecorder()
+			f.handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, tripPath, nil))
+			entry := assertAccessLog(t, f, http.MethodGet, tripRoute, http.StatusInternalServerError, "ERROR")
+			if value, ok := entry["panic"].(string); !ok || value != tc.want {
+				t.Fatalf("panic value = %v, want %q", entry["panic"], tc.want)
+			}
+			if strings.Contains(recorder.Body.String(), privatePanicValue) {
+				t.Fatalf("panic value appeared in response: %s", recorder.Body.String())
+			}
+			assertPanicDetailsHidden(t, f.spans.Ended()[0])
+		})
 	}
 }
 
@@ -383,7 +416,7 @@ func TestPanicAfterResponseStarted(t *testing.T) {
 					}
 					flusher.Flush()
 				}
-				panic("private panic value")
+				panic(privatePanicValue)
 			})
 			f := newSignals(t, router)
 			recorder := httptest.NewRecorder()
@@ -406,6 +439,9 @@ func TestPanicAfterResponseStarted(t *testing.T) {
 				t.Fatalf("partial response = %d %q; want %d %q", recorder.Code, recorder.Body.String(), wantStatus, wantBody)
 			}
 			entry := assertAccessLog(t, f, http.MethodGet, partialRoute, http.StatusInternalServerError, "ERROR")
+			if entry["panic"] != privatePanicValue {
+				t.Fatalf("partial response panic value = %v", entry["panic"])
+			}
 			if stack, ok := entry["stack"].(string); !ok || stack == "" {
 				t.Fatal("partial response panic has no stack trace")
 			}

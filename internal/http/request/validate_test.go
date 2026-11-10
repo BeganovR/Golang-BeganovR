@@ -88,3 +88,45 @@ func TestUUID(t *testing.T) {
 		}
 	}
 }
+
+func TestValidationDetails(t *testing.T) {
+	t.Parallel()
+	const priceField = "price"
+	validator, err := request.NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		body   string
+		field  string
+		reason string
+	}{
+		{name: "malformed JSON", body: `{"private_value":"sensitive",`, field: "body", reason: "valid JSON"},
+		{name: "missing coordinate", body: strings.Replace(validBody, `,"longitude":30.3`, "", 1), field: "start_point.longitude", reason: "missing"},
+		{name: "invalid coordinate", body: strings.Replace(validBody, `"latitude":59.9`, `"latitude":91`, 1), field: "start_point.latitude", reason: "90"},
+		{name: "negative price", body: strings.Replace(validBody, `"price":1450`, `"price":-1`, 1), field: priceField, reason: "0"},
+		{name: "wrong type", body: strings.Replace(validBody, `"price":1450`, `"price":"sensitive"`, 1), field: priceField, reason: "integer"},
+		{name: "overflow", body: strings.Replace(validBody, `"price":1450`, `"price":9223372036854775808`, 1), field: priceField, reason: "declared field type"},
+		{name: "invalid UUID", body: strings.Replace(validBody, "5cb72c04-7650-45c9-a79b-bcdba0631e0c", "sensitive", 1), field: "user_id", reason: "UUID"},
+		{name: "zero UUID", body: strings.Replace(validBody, "8860b315-ec86-42eb-a17c-7c163d721ff5", "00000000-0000-0000-0000-000000000000", 1), field: "driver_id", reason: "must not be empty"},
+		{name: "unknown field", body: strings.TrimSuffix(validBody, "}") + `,"private_value":"sensitive"}`, field: "body", reason: "unknown fields"},
+		{name: "unknown nested field", body: strings.Replace(validBody, `"latitude":59.9`, `"private_value":"sensitive","latitude":59.9`, 1), field: "start_point", reason: "unknown fields"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := httptest.NewRequest(http.MethodPost, "/api/v1/trips", strings.NewReader(tc.body))
+			_, err := validator.TripData(httptest.NewRecorder(), r)
+			status, body := domainerror.Problem(err)
+			if status != http.StatusBadRequest || body.Detail == nil {
+				t.Fatalf("validation problem = %d, %+v", status, body)
+			}
+			if !strings.HasPrefix(*body.Detail, tc.field+": ") || !strings.Contains(*body.Detail, tc.reason) {
+				t.Errorf("detail = %q, want field %q and reason %q", *body.Detail, tc.field, tc.reason)
+			}
+			if strings.Contains(*body.Detail, "sensitive") || strings.Contains(*body.Detail, "private_value") {
+				t.Fatalf("request contents leaked: %q", *body.Detail)
+			}
+		})
+	}
+}
