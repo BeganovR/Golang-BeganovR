@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 )
 
 func NewPool(t *testing.T) *pgxpool.Pool {
@@ -59,24 +61,28 @@ func NewPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatalf("create test pool: %v", err)
 	}
-	paths := migrationPaths(t)
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read migration: %v", err)
-		}
-		up, _, found := strings.Cut(string(data), "-- +goose Down")
-		if !found {
-			t.Fatalf("migration has no Down marker: %s", path)
-		}
-		if _, err := pool.Exec(ctx, up); err != nil {
-			t.Fatalf("apply migration %s: %v", path, err)
-		}
-	}
+	applyMigrations(ctx, t, pool)
 	return pool
 }
 
-func migrationPaths(t *testing.T) []string {
+func applyMigrations(ctx context.Context, t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	db := stdlib.OpenDBFromPool(pool)
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close migration connection: %v", err)
+		}
+	}()
+	migrations, err := goose.NewProvider(goose.DialectPostgres, db, os.DirFS(migrationDir(t)))
+	if err != nil {
+		t.Fatalf("open migrations: %v", err)
+	}
+	if _, err := migrations.Up(ctx); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+}
+
+func migrationDir(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
 	if err != nil {
@@ -92,11 +98,7 @@ func migrationPaths(t *testing.T) []string {
 		}
 		dir = parent
 	}
-	paths, err := filepath.Glob(filepath.Join(dir, "migrations", "*.sql"))
-	if err != nil || len(paths) == 0 {
-		t.Fatalf("find migrations: %v", err)
-	}
-	return paths
+	return filepath.Join(dir, "migrations")
 }
 
 func Count(t *testing.T, pool *pgxpool.Pool, table string) int {

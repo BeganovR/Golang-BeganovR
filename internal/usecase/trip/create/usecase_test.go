@@ -78,6 +78,7 @@ func TestExecuteCreate(t *testing.T) {
 			input.ID, input.Status = uuid.New(), trip.TripStatusCompleted
 			oldFinish := f.now.Add(-time.Minute)
 			input.FinishedAt = &oldFinish
+			input.LastPositionAt = &oldFinish
 			var key *uuid.UUID
 			hash := []byte("request hash")
 			committed := false
@@ -118,7 +119,11 @@ func TestExecuteCreate(t *testing.T) {
 			if got.StartedAt != startedAt {
 				t.Fatalf("StartedAt = %v, want %v", got.StartedAt, startedAt)
 			}
+			if got.LastPositionAt != nil {
+				t.Fatalf("LastPositionAt = %v, want nil", got.LastPositionAt)
+			}
 			input.ID, input.Status, input.StartedAt, input.FinishedAt = got.ID, got.Status, got.StartedAt, got.FinishedAt
+			input.LastPositionAt = nil
 			if !reflect.DeepEqual(got, input) {
 				t.Fatalf("input fields changed: got %+v, want %+v", got, input)
 			}

@@ -20,6 +20,8 @@ type Providers struct {
 	Traces      *sdktrace.TracerProvider
 	Metrics     *sdkmetric.MeterProvider
 	ServiceName string
+
+	traceProcessor sdktrace.SpanProcessor
 }
 
 func New(ctx context.Context, version string) (*Providers, error) {
@@ -43,12 +45,14 @@ func New(ctx context.Context, version string) (*Providers, error) {
 		return nil, err
 	}
 	serviceName, _ := res.Set().Value(attribute.Key("service.name"))
+	traceProcessor := sdktrace.NewBatchSpanProcessor(traceExporter)
 	return &Providers{
-		ServiceName: serviceName.AsString(),
+		ServiceName:    serviceName.AsString(),
+		traceProcessor: traceProcessor,
 		Traces: sdktrace.NewTracerProvider(
 			sdktrace.WithResource(res),
 			sdktrace.WithoutPanicRecording(),
-			sdktrace.WithBatcher(traceExporter),
+			sdktrace.WithSpanProcessor(traceProcessor),
 		),
 		Metrics: sdkmetric.NewMeterProvider(
 			sdkmetric.WithResource(res),
@@ -85,5 +89,10 @@ func exporters(ctx context.Context) (sdktrace.SpanExporter, sdkmetric.Exporter, 
 }
 
 func (p *Providers) Shutdown(ctx context.Context) error {
-	return errors.Join(p.Metrics.Shutdown(ctx), p.Traces.Shutdown(ctx))
+	metricErr := p.Metrics.Shutdown(ctx)
+	traceErr := p.Traces.Shutdown(ctx)
+	if p.traceProcessor != nil && ctx.Err() != nil {
+		traceErr = errors.Join(traceErr, p.traceProcessor.Shutdown(ctx))
+	}
+	return errors.Join(metricErr, traceErr, ctx.Err())
 }

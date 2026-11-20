@@ -1,4 +1,5 @@
 //go:generate go tool mockgen -source ../worker/idempotency/contract.go -destination mocks_test.go -package container -mock_names keyRepository=MockKeyRepository
+//go:generate go tool mockgen -source contract.go -destination position_mocks_test.go -package container -mock_names positionWorker=MockPositionWorker
 
 package container
 
@@ -19,6 +20,7 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.uber.org/goleak"
 	"go.uber.org/mock/gomock"
 
 	"github.com/BeganovR/Golang-BeganovR/internal/infra/telemetry"
@@ -27,22 +29,43 @@ import (
 
 const lifecycleTimeout = 5 * time.Second
 
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
+
 type purgerLifecycle struct {
-	started chan context.Context
-	stopped chan struct{}
+	started          chan context.Context
+	stopped          chan struct{}
+	positionsStopped chan struct{}
 }
 
 func lifecycleContainer(t *testing.T, handler http.Handler, timeout time.Duration) (*Container, <-chan string, *purgerLifecycle, *sdkmetric.ManualReader) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	lifecycle := &purgerLifecycle{started: make(chan context.Context, 1), stopped: make(chan struct{})}
-	keys := NewMockKeyRepository(gomock.NewController(t))
+	lifecycle := &purgerLifecycle{
+		started:          make(chan context.Context, 1),
+		stopped:          make(chan struct{}),
+		positionsStopped: make(chan struct{}),
+	}
+	ctrl := gomock.NewController(t)
+	keys := NewMockKeyRepository(ctrl)
 	keys.EXPECT().DeleteExpired(gomock.Any(), time.Hour).DoAndReturn(func(ctx context.Context, _ time.Duration) (int64, error) {
 		lifecycle.started <- ctx
 		<-ctx.Done()
 		close(lifecycle.stopped)
 		return 0, ctx.Err()
 	})
+	positions := NewMockPositionWorker(ctrl)
+	gomock.InOrder(
+		positions.EXPECT().Start(gomock.Any()),
+		positions.EXPECT().Shutdown(gomock.Any()).DoAndReturn(func(ctx context.Context) error {
+			if _, ok := ctx.Deadline(); !ok {
+				t.Error("position worker shutdown has no deadline")
+			}
+			close(lifecycle.positionsStopped)
+			return ctx.Err()
+		}),
+	)
 	reader := sdkmetric.NewManualReader()
 	ready := make(chan string, 1)
 	c := &Container{
@@ -53,7 +76,8 @@ func lifecycleContainer(t *testing.T, handler http.Handler, timeout time.Duratio
 				return context.Background()
 			},
 		},
-		purger: keypurger.New(keys, time.Hour, time.Hour, time.Hour, logger),
+		purger:    keypurger.New(keys, time.Hour, time.Hour, time.Hour, logger),
+		positions: positions,
 		telemetry: &telemetry.Providers{
 			Traces:  sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample())),
 			Metrics: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader)),
@@ -109,6 +133,7 @@ func request(t *testing.T, address string) <-chan response {
 	}
 	go func() {
 		client := &http.Client{Timeout: lifecycleTimeout}
+		defer client.CloseIdleConnections()
 		res, err := client.Do(req)
 		if err != nil {
 			results <- response{err: err}
@@ -164,6 +189,11 @@ func TestRunDrainsRequestsBeforeStoppingDependencies(t *testing.T) {
 	if err := purgeContext.Err(); err != nil {
 		t.Fatalf("worker stopped while HTTP request was draining: %v", err)
 	}
+	select {
+	case <-keys.positionsStopped:
+		t.Fatal("position worker stopped while HTTP request was draining")
+	default:
+	}
 	var resource metricdata.ResourceMetrics
 	if err := reader.Collect(t.Context(), &resource); err != nil {
 		t.Fatalf("metrics stopped while HTTP request was draining: %v", err)
@@ -176,6 +206,7 @@ func TestRunDrainsRequestsBeforeStoppingDependencies(t *testing.T) {
 		t.Fatalf("Run() = %v", err)
 	}
 	waitResult(t, keys.stopped)
+	waitResult(t, keys.positionsStopped)
 	assertProvidersStopped(t, c, reader)
 	if conn, err := c.pool.Acquire(t.Context()); !errors.Is(err, puddle.ErrClosedPool) {
 		if conn != nil {

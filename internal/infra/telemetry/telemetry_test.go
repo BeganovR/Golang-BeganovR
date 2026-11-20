@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.uber.org/goleak"
 
 	"github.com/BeganovR/Golang-BeganovR/internal/infra/telemetry"
 )
@@ -24,6 +26,21 @@ func TestUnsupportedProtocol(t *testing.T) {
 	providers, err := telemetry.New(context.Background(), "test-version")
 	if providers != nil || err == nil || !strings.Contains(err.Error(), "unsupported OTLP protocol") {
 		t.Fatalf("New() = %+v, %v", providers, err)
+	}
+}
+
+func TestProvidersShutdownWithCanceledContext(t *testing.T) {
+	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
+	providers, err := telemetry.New(t.Context(), "test-version")
+	if err != nil {
+		t.Fatalf("create telemetry: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := providers.Shutdown(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("shutdown telemetry: got %v, want context.Canceled", err)
 	}
 }
 

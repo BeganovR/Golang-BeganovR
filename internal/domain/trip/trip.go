@@ -20,15 +20,16 @@ type Point struct {
 }
 
 type Trip struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
-	DriverID   uuid.UUID
-	StartPoint Point
-	EndPoint   Point
-	Price      int64
-	Status     TripStatus
-	StartedAt  time.Time
-	FinishedAt *time.Time
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	DriverID       uuid.UUID
+	StartPoint     Point
+	EndPoint       Point
+	Price          int64
+	Status         TripStatus
+	StartedAt      time.Time
+	FinishedAt     *time.Time
+	LastPositionAt *time.Time
 }
 
 type IdempotencyRecord struct {
@@ -51,15 +52,22 @@ func (t Trip) Validate() error {
 		{field: "end_point", point: t.EndPoint},
 	}
 	for _, p := range points {
-		if math.IsNaN(p.point.Latitude) || math.IsInf(p.point.Latitude, 0) || p.point.Latitude < -90 || p.point.Latitude > 90 {
-			return &ValidationError{Field: p.field + ".latitude", Message: "must be between -90 and 90"}
-		}
-		if math.IsNaN(p.point.Longitude) || math.IsInf(p.point.Longitude, 0) || p.point.Longitude < -180 || p.point.Longitude > 180 {
-			return &ValidationError{Field: p.field + ".longitude", Message: "must be between -180 and 180"}
+		if err := p.point.validate(p.field); err != nil {
+			return err
 		}
 	}
 	if t.Price < 0 {
 		return &ValidationError{Field: "price", Message: "must be non-negative"}
+	}
+	return nil
+}
+
+func (p Point) validate(field string) error {
+	if math.IsNaN(p.Latitude) || p.Latitude < -90 || p.Latitude > 90 {
+		return &ValidationError{Field: field + ".latitude", Message: "must be between -90 and 90"}
+	}
+	if math.IsNaN(p.Longitude) || p.Longitude < -180 || p.Longitude > 180 {
+		return &ValidationError{Field: field + ".longitude", Message: "must be between -180 and 180"}
 	}
 	return nil
 }

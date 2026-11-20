@@ -22,6 +22,14 @@ type Config struct {
 	IdempotencyKeyTTL        time.Duration `env:"IDEMPOTENCY_KEY_TTL" envDefault:"24h"`
 	IdempotencyPurgeInterval time.Duration `env:"IDEMPOTENCY_PURGE_INTERVAL" envDefault:"1h"`
 
+	PositionCheckInterval time.Duration `env:"POSITION_CHECK_INTERVAL" envDefault:"30s"`
+	PositionStaleAfter    time.Duration `env:"POSITION_STALE_AFTER" envDefault:"60s"`
+	PositionWorkers       int           `env:"POSITION_WORKERS" envDefault:"4"`
+	PositionQueueSize     int           `env:"POSITION_QUEUE_SIZE" envDefault:"100"`
+	PositionScanBatchSize int           `env:"POSITION_SCAN_BATCH_SIZE" envDefault:"100"`
+	PushHTTPURL           string        `env:"PUSH_HTTP_URL,required,notEmpty"`
+	PushRequestTimeout    time.Duration `env:"PUSH_REQUEST_TIMEOUT" envDefault:"1s"`
+
 	DatabaseURL             string        `env:"DATABASE_URL,required,notEmpty"`
 	DatabaseMaxConns        int32         `env:"DATABASE_MAX_CONNS,required,notEmpty"`
 	DatabaseMinConns        int32         `env:"DATABASE_MIN_CONNS,required,notEmpty"`
@@ -53,6 +61,9 @@ func (c Config) validate() error {
 		{"HTTP_IDLE_TIMEOUT", c.HTTPIdleTimeout},
 		{"IDEMPOTENCY_KEY_TTL", c.IdempotencyKeyTTL},
 		{"IDEMPOTENCY_PURGE_INTERVAL", c.IdempotencyPurgeInterval},
+		{"POSITION_CHECK_INTERVAL", c.PositionCheckInterval},
+		{"POSITION_STALE_AFTER", c.PositionStaleAfter},
+		{"PUSH_REQUEST_TIMEOUT", c.PushRequestTimeout},
 		{"DATABASE_MAX_CONN_LIFETIME", c.DatabaseMaxConnLifetime},
 		{"DATABASE_CONNECT_TIMEOUT", c.DatabaseConnectTimeout},
 		{"DATABASE_QUERY_TIMEOUT", c.DatabaseQueryTimeout},
@@ -69,6 +80,18 @@ func (c Config) validate() error {
 	}
 	if c.DatabaseMinConns < 0 || c.DatabaseMinConns > c.DatabaseMaxConns {
 		errs = append(errs, fmt.Errorf("DATABASE_MIN_CONNS must be between 0 and DATABASE_MAX_CONNS, got %d", c.DatabaseMinConns))
+	}
+	for _, size := range []struct {
+		name  string
+		value int
+	}{
+		{"POSITION_WORKERS", c.PositionWorkers},
+		{"POSITION_QUEUE_SIZE", c.PositionQueueSize},
+		{"POSITION_SCAN_BATCH_SIZE", c.PositionScanBatchSize},
+	} {
+		if size.value < 1 {
+			errs = append(errs, fmt.Errorf("%s must be at least 1, got %d", size.name, size.value))
+		}
 	}
 	return errors.Join(errs...)
 }

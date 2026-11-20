@@ -28,7 +28,7 @@ var psql = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 var tripColumns = []string{
 	"id", "user_id", "driver_id",
 	"start_latitude", "start_longitude", "end_latitude", "end_longitude",
-	"price", statusColumn, "started_at", "finished_at",
+	"price", statusColumn, "started_at", "finished_at", "last_position_at",
 }
 
 type Repository struct {
@@ -81,6 +81,18 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (domain.Trip, er
 	return t, nil
 }
 
+func (r *Repository) CheckExists(ctx context.Context, id uuid.UUID) error {
+	const query = `SELECT EXISTS (SELECT 1 FROM trips WHERE id = $1)`
+	var exists bool
+	if err := transaction.ExecutorFrom(ctx, r.pool).QueryRow(ctx, query, id).Scan(&exists); err != nil {
+		return fmt.Errorf("check trip existence: %w", err)
+	}
+	if !exists {
+		return domain.ErrTripNotFound
+	}
+	return nil
+}
+
 func (r *Repository) Finish(ctx context.Context, id uuid.UUID, finishedAt time.Time) (domain.Trip, error) {
 	query, args, err := psql.Update("trips").
 		Set(statusColumn, domain.TripStatusCompleted).
@@ -101,7 +113,7 @@ func (r *Repository) Finish(ctx context.Context, id uuid.UUID, finishedAt time.T
 		return domain.Trip{}, fmt.Errorf("finish trip: %w", err)
 	}
 
-	if _, err := r.GetByID(ctx, id); err != nil {
+	if err := r.CheckExists(ctx, id); err != nil {
 		return domain.Trip{}, err
 	}
 	return domain.Trip{}, domain.ErrTripCompleted
@@ -126,7 +138,7 @@ func scanTrip(row pgx.Row) (domain.Trip, error) {
 		&t.ID, &t.UserID, &t.DriverID,
 		&t.StartPoint.Latitude, &t.StartPoint.Longitude,
 		&t.EndPoint.Latitude, &t.EndPoint.Longitude,
-		&t.Price, &t.Status, &t.StartedAt, &t.FinishedAt,
+		&t.Price, &t.Status, &t.StartedAt, &t.FinishedAt, &t.LastPositionAt,
 	)
 	if err != nil {
 		return domain.Trip{}, fmt.Errorf("scan trip: %w", err)
@@ -136,6 +148,10 @@ func scanTrip(row pgx.Row) (domain.Trip, error) {
 	if t.FinishedAt != nil {
 		finished := t.FinishedAt.UTC()
 		t.FinishedAt = &finished
+	}
+	if t.LastPositionAt != nil {
+		recorded := t.LastPositionAt.UTC()
+		t.LastPositionAt = &recorded
 	}
 	return t, nil
 }

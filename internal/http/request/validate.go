@@ -22,7 +22,8 @@ const maxBodyBytes = 1 << 20
 var canonicalUUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 type Validator struct {
-	tripData *openapi3.Schema
+	tripData     *openapi3.Schema
+	positionData *openapi3.Schema
 }
 
 func NewValidator() (*Validator, error) {
@@ -30,7 +31,10 @@ func NewValidator() (*Validator, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load openapi specification: %w", err)
 	}
-	return &Validator{tripData: spec.Components.Schemas["TripData"].Value}, nil
+	return &Validator{
+		tripData:     spec.Components.Schemas["TripData"].Value,
+		positionData: spec.Components.Schemas["PositionData"].Value,
+	}, nil
 }
 
 func UUID(value string) bool {
@@ -38,16 +42,9 @@ func UUID(value string) bool {
 }
 
 func (v *Validator) TripData(w http.ResponseWriter, r *http.Request) (api.TripData, error) {
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
+	body, payload, err := validateBody(w, r, v.tripData)
 	if err != nil {
-		return api.TripData{}, fmt.Errorf("%w: %w", validationError("body", "could not be read"), err)
-	}
-	var payload any
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return api.TripData{}, validationError("body", "must be valid JSON")
-	}
-	if err := v.tripData.VisitJSON(payload, openapi3.EnableFormatValidation()); err != nil {
-		return api.TripData{}, schemaValidationError(err)
+		return api.TripData{}, err
 	}
 	object, ok := payload.(map[string]any)
 	if !ok {
@@ -74,6 +71,33 @@ func (v *Validator) TripData(w http.ResponseWriter, r *http.Request) (api.TripDa
 		return api.TripData{}, validationError("driver_id", "must not be empty")
 	}
 	return data, nil
+}
+
+func (v *Validator) PositionData(w http.ResponseWriter, r *http.Request) (api.PositionData, error) {
+	body, _, err := validateBody(w, r, v.positionData)
+	if err != nil {
+		return api.PositionData{}, err
+	}
+	var data api.PositionData
+	if err := json.Unmarshal(body, &data); err != nil {
+		return api.PositionData{}, validationError("recorded_at", "must match format date-time")
+	}
+	return data, nil
+}
+
+func validateBody(w http.ResponseWriter, r *http.Request, schema *openapi3.Schema) ([]byte, any, error) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", validationError("body", "could not be read"), err)
+	}
+	var payload any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, nil, validationError("body", "must be valid JSON")
+	}
+	if err := schema.VisitJSON(payload, openapi3.EnableFormatValidation()); err != nil {
+		return nil, nil, schemaValidationError(err)
+	}
+	return body, payload, nil
 }
 
 func validationError(field, message string) error {
