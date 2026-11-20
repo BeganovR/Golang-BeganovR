@@ -44,6 +44,7 @@ func (u *Usecase) Execute(ctx context.Context, key *uuid.UUID, requestHash []byt
 	input.Status = trip.TripStatusActive
 	input.StartedAt = u.now().UTC().Truncate(time.Microsecond)
 	input.FinishedAt = nil
+	input.LastPositionAt = nil
 	saved, replayed := input, false
 	err = u.txm.Do(ctx, func(ctx context.Context) error {
 		if key != nil {

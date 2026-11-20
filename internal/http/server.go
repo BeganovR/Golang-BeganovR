@@ -16,6 +16,7 @@ import (
 	"github.com/BeganovR/Golang-BeganovR/internal/http/trip/create"
 	"github.com/BeganovR/Golang-BeganovR/internal/http/trip/finish"
 	"github.com/BeganovR/Golang-BeganovR/internal/http/trip/get"
+	"github.com/BeganovR/Golang-BeganovR/internal/http/trip/positions"
 )
 
 var _ api.ServerInterface = (*Server)(nil)
@@ -24,16 +25,18 @@ type Deps struct {
 	Create       createUsecase
 	Get          tripUsecase
 	Finish       tripUsecase
+	Positions    positionUsecase
 	Pinger       pinger
 	QueryTimeout time.Duration
 }
 
 type Server struct {
-	create  *create.Handler
-	get     *get.Handler
-	finish  *finish.Handler
-	pinger  pinger
-	timeout time.Duration
+	create    *create.Handler
+	get       *get.Handler
+	finish    *finish.Handler
+	positions *positions.Handler
+	pinger    pinger
+	timeout   time.Duration
 }
 
 func NewServer(d Deps) (*Server, error) {
@@ -42,11 +45,12 @@ func NewServer(d Deps) (*Server, error) {
 		return nil, err
 	}
 	return &Server{
-		create:  create.New(d.Create, d.QueryTimeout, validator),
-		get:     get.New(d.Get, d.QueryTimeout),
-		finish:  finish.New(d.Finish, d.QueryTimeout),
-		pinger:  d.Pinger,
-		timeout: d.QueryTimeout,
+		create:    create.New(d.Create, d.QueryTimeout, validator),
+		get:       get.New(d.Get, d.QueryTimeout),
+		finish:    finish.New(d.Finish, d.QueryTimeout),
+		positions: positions.New(d.Positions, d.QueryTimeout, validator),
+		pinger:    d.Pinger,
+		timeout:   d.QueryTimeout,
 	}, nil
 }
 
@@ -83,6 +87,14 @@ func (s *Server) GetTrip(w http.ResponseWriter, r *http.Request, id api.TripId) 
 
 func (s *Server) FinishTrip(w http.ResponseWriter, r *http.Request, id api.TripId) {
 	s.finish.Handle(w, r, id)
+}
+
+func (s *Server) CreateTripPosition(w http.ResponseWriter, r *http.Request, id api.TripId) {
+	s.positions.Save(w, r, id)
+}
+
+func (s *Server) ListTripPositions(w http.ResponseWriter, r *http.Request, id api.TripId) {
+	s.positions.List(w, r, id)
 }
 
 func (s *Server) Health(w http.ResponseWriter, r *http.Request) {

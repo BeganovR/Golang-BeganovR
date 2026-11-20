@@ -40,6 +40,7 @@ func TestStartupDiagnostics(t *testing.T) {
 				"DATABASE_URL=postgres://user:test@127.0.0.1:invalid/database",
 				"DATABASE_MAX_CONNS=1", "DATABASE_MIN_CONNS=0", "DATABASE_MAX_CONN_LIFETIME=1h",
 				"DATABASE_CONNECT_TIMEOUT=1s", "DATABASE_QUERY_TIMEOUT=1s",
+				"PUSH_HTTP_URL=http://127.0.0.1:1",
 				"OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:1", "OTEL_TRACES_SAMPLER=invalid-sampler",
 				"OTEL_SERVICE_NAME=" + tc.service, "OTEL_RESOURCE_ATTRIBUTES=" + tc.attributes,
 			}

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/BeganovR/Golang-BeganovR/internal/config"
+	"github.com/BeganovR/Golang-BeganovR/internal/gateway/push"
 	httptransport "github.com/BeganovR/Golang-BeganovR/internal/http"
 	"github.com/BeganovR/Golang-BeganovR/internal/http/middleware"
 	"github.com/BeganovR/Golang-BeganovR/internal/infra/postgres"
@@ -18,17 +19,22 @@ import (
 	"github.com/BeganovR/Golang-BeganovR/internal/infra/telemetry"
 	"github.com/BeganovR/Golang-BeganovR/internal/repository/history"
 	"github.com/BeganovR/Golang-BeganovR/internal/repository/idempotency"
+	positionrepo "github.com/BeganovR/Golang-BeganovR/internal/repository/position"
 	"github.com/BeganovR/Golang-BeganovR/internal/repository/trip"
 	"github.com/BeganovR/Golang-BeganovR/internal/usecase/trip/create"
 	"github.com/BeganovR/Golang-BeganovR/internal/usecase/trip/finish"
 	"github.com/BeganovR/Golang-BeganovR/internal/usecase/trip/get"
+	positionusecase "github.com/BeganovR/Golang-BeganovR/internal/usecase/trip/positions"
 	keypurger "github.com/BeganovR/Golang-BeganovR/internal/worker/idempotency"
+	positionworker "github.com/BeganovR/Golang-BeganovR/internal/worker/positions"
 )
 
 type Container struct {
 	server          *http.Server
 	pool            *pgxpool.Pool
 	purger          *keypurger.Purger
+	positions       positionWorker
+	push            *push.Gateway
 	telemetry       *telemetry.Providers
 	logger          *slog.Logger
 	shutdownTimeout time.Duration
@@ -47,6 +53,10 @@ func New(ctx context.Context, cfg config.Config, version string, logger *slog.Lo
 			err = errors.Join(err, c.close(cleanupCtx))
 		}
 	}()
+	c.push, err = push.New(cfg.PushHTTPURL, cfg.PushRequestTimeout, providers.Traces)
+	if err != nil {
+		return nil, err
+	}
 	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
 		return nil, errors.New("parse database config: invalid DATABASE_URL")
@@ -74,10 +84,25 @@ func New(ctx context.Context, cfg config.Config, version string, logger *slog.Lo
 	if err != nil {
 		return nil, err
 	}
+	positionMetrics, err := telemetry.NewPositions(providers.Metrics)
+	if err != nil {
+		return nil, err
+	}
+	positions := positionworker.New(positionworker.Config{
+		CheckInterval:  cfg.PositionCheckInterval,
+		StaleAfter:     cfg.PositionStaleAfter,
+		QueryTimeout:   cfg.DatabaseQueryTimeout,
+		RequestTimeout: cfg.PushRequestTimeout,
+		Workers:        cfg.PositionWorkers,
+		QueueSize:      cfg.PositionQueueSize,
+		BatchSize:      cfg.PositionScanBatchSize,
+	}, trips, c.push, positionMetrics, providers.Traces, logger)
+	c.positions = positions
 	api, err := httptransport.NewServer(httptransport.Deps{
 		Create:       create.New(txm, trips, histories, keys, cfg.IdempotencyKeyTTL, logger, metrics, time.Now),
 		Get:          get.New(trips),
 		Finish:       finish.New(txm, trips, histories, logger, metrics, time.Now),
+		Positions:    positionusecase.New(txm, trips, positionrepo.New(c.pool), positions, positionMetrics, time.Now),
 		Pinger:       c.pool,
 		QueryTimeout: cfg.DatabaseQueryTimeout,
 	})
@@ -102,11 +127,13 @@ func New(ctx context.Context, cfg config.Config, version string, logger *slog.Lo
 }
 
 func (c *Container) Run(ctx context.Context) error {
-	workerCtx, stopWorker := context.WithCancel(context.WithoutCancel(ctx))
+	appCtx := context.WithoutCancel(ctx)
+	c.positions.Start(appCtx)
+	purgerCtx, stopPurger := context.WithCancel(appCtx)
 	workerDone := make(chan struct{})
 	go func() {
 		defer close(workerDone)
-		c.purger.Run(workerCtx)
+		c.purger.Run(purgerCtx)
 	}()
 	serverErr := make(chan error, 1)
 	go func() {
@@ -114,24 +141,37 @@ func (c *Container) Run(ctx context.Context) error {
 		serverErr <- c.server.ListenAndServe()
 	}()
 	var err error
+	serverStopped := false
 	select {
 	case err = <-serverErr:
+		serverStopped = true
 		if errors.Is(err, http.ErrServerClosed) {
 			err = nil
 		}
 	case <-ctx.Done():
 		c.logger.Info("shutdown signal received")
 	}
-	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.shutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(appCtx, c.shutdownTimeout)
 	defer cancel()
 	if shutdownErr := c.server.Shutdown(shutdownCtx); shutdownErr != nil {
 		err = errors.Join(err, fmt.Errorf("graceful shutdown: %w", shutdownErr), c.server.Close())
 	}
-	stopWorker()
+	stopPurger()
+	err = errors.Join(err, c.positions.Shutdown(shutdownCtx))
 	select {
 	case <-workerDone:
 	case <-shutdownCtx.Done():
 		err = errors.Join(err, shutdownCtx.Err())
+	}
+	if !serverStopped {
+		select {
+		case serveErr := <-serverErr:
+			if !errors.Is(serveErr, http.ErrServerClosed) {
+				err = errors.Join(err, serveErr)
+			}
+		case <-shutdownCtx.Done():
+			err = errors.Join(err, shutdownCtx.Err())
+		}
 	}
 	err = errors.Join(err, c.close(shutdownCtx))
 	if err == nil {
@@ -141,6 +181,9 @@ func (c *Container) Run(ctx context.Context) error {
 }
 
 func (c *Container) close(ctx context.Context) error {
+	if c.push != nil {
+		c.push.CloseIdleConnections()
+	}
 	if err := c.telemetry.Shutdown(ctx); err != nil {
 		c.logger.WarnContext(ctx, "telemetry shutdown failed", "error", err)
 	}
