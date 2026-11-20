@@ -1,0 +1,351 @@
+{
+  "tool": "gremlins",
+  "version": "0.6.0",
+  "phase": "before",
+  "mutators": "default",
+  "arguments": [
+    "--workers",
+    "4",
+    "--test-cpu",
+    "1",
+    "--timeout-coefficient",
+    "1000"
+  ],
+  "summary": {
+    "total": 37,
+    "killed": 37,
+    "lived": 0,
+    "timed_out": 0,
+    "not_covered": 0,
+    "not_viable": 0,
+    "skipped": 0
+  },
+  "packages": [
+    {
+      "path": "internal/domain/trip",
+      "report": {
+        "go_module": "github.com/BeganovR/Golang-BeganovR",
+        "files": [
+          {
+            "file_name": "errors.go",
+            "mutations": [
+              {
+                "type": "ARITHMETIC_BASE",
+                "status": "KILLED",
+                "line": 18,
+                "column": 24
+              },
+              {
+                "type": "ARITHMETIC_BASE",
+                "status": "KILLED",
+                "line": 18,
+                "column": 17
+              }
+            ]
+          },
+          {
+            "file_name": "trip.go",
+            "mutations": [
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 40,
+                "column": 14
+              },
+              {
+                "type": "CONDITIONALS_BOUNDARY",
+                "status": "KILLED",
+                "line": 54,
+                "column": 90
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 43,
+                "column": 16
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 54,
+                "column": 90
+              },
+              {
+                "type": "ARITHMETIC_BASE",
+                "status": "KILLED",
+                "line": 54,
+                "column": 92
+              },
+              {
+                "type": "CONDITIONALS_BOUNDARY",
+                "status": "KILLED",
+                "line": 54,
+                "column": 116
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 54,
+                "column": 116
+              },
+              {
+                "type": "INVERT_NEGATIVES",
+                "status": "KILLED",
+                "line": 54,
+                "column": 92
+              },
+              {
+                "type": "ARITHMETIC_BASE",
+                "status": "KILLED",
+                "line": 55,
+                "column": 43
+              },
+              {
+                "type": "CONDITIONALS_BOUNDARY",
+                "status": "KILLED",
+                "line": 57,
+                "column": 93
+              },
+              {
+                "type": "INVERT_NEGATIVES",
+                "status": "KILLED",
+                "line": 57,
+                "column": 95
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 57,
+                "column": 93
+              },
+              {
+                "type": "ARITHMETIC_BASE",
+                "status": "KILLED",
+                "line": 57,
+                "column": 95
+              },
+              {
+                "type": "ARITHMETIC_BASE",
+                "status": "KILLED",
+                "line": 58,
+                "column": 43
+              },
+              {
+                "type": "CONDITIONALS_BOUNDARY",
+                "status": "KILLED",
+                "line": 57,
+                "column": 121
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 57,
+                "column": 121
+              },
+              {
+                "type": "CONDITIONALS_BOUNDARY",
+                "status": "KILLED",
+                "line": 61,
+                "column": 13
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 61,
+                "column": 13
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 68,
+                "column": 14
+              }
+            ]
+          }
+        ],
+        "test_efficacy": 100,
+        "mutations_coverage": 100,
+        "mutants_total": 21,
+        "mutants_killed": 21,
+        "mutants_lived": 0,
+        "mutants_not_viable": 0,
+        "mutants_not_covered": 0,
+        "elapsed_time": 3.002807891,
+        "mutator_statistics": {
+          "arithmetic_base": 6,
+          "conditionals_negation": 8,
+          "conditionals_boundary": 5,
+          "invert_negatives": 2
+        }
+      }
+    },
+    {
+      "path": "internal/usecase/trip/create",
+      "report": {
+        "go_module": "github.com/BeganovR/Golang-BeganovR",
+        "files": [
+          {
+            "file_name": "usecase.go",
+            "mutations": [
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 48,
+                "column": 10
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 39,
+                "column": 9
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 50,
+                "column": 11
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 35,
+                "column": 34
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 55,
+                "column": 12
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 65,
+                "column": 91
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 62,
+                "column": 45
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 70,
+                "column": 9
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 82,
+                "column": 9
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 89,
+                "column": 9
+              }
+            ]
+          }
+        ],
+        "test_efficacy": 100,
+        "mutations_coverage": 100,
+        "mutants_total": 10,
+        "mutants_killed": 10,
+        "mutants_lived": 0,
+        "mutants_not_viable": 0,
+        "mutants_not_covered": 0,
+        "elapsed_time": 2.5149884399999998,
+        "mutator_statistics": {
+          "conditionals_negation": 10
+        }
+      }
+    },
+    {
+      "path": "internal/usecase/trip/get",
+      "report": {
+        "go_module": "github.com/BeganovR/Golang-BeganovR",
+        "files": [
+          {
+            "file_name": "usecase.go",
+            "mutations": [
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 22,
+                "column": 9
+              }
+            ]
+          }
+        ],
+        "test_efficacy": 100,
+        "mutations_coverage": 100,
+        "mutants_total": 1,
+        "mutants_killed": 1,
+        "mutants_lived": 0,
+        "mutants_not_viable": 0,
+        "mutants_not_covered": 0,
+        "elapsed_time": 0.491245453,
+        "mutator_statistics": {
+          "conditionals_negation": 1
+        }
+      }
+    },
+    {
+      "path": "internal/usecase/trip/finish",
+      "report": {
+        "go_module": "github.com/BeganovR/Golang-BeganovR",
+        "files": [
+          {
+            "file_name": "usecase.go",
+            "mutations": [
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 29,
+                "column": 10
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 36,
+                "column": 10
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 40,
+                "column": 91
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 32,
+                "column": 45
+              },
+              {
+                "type": "CONDITIONALS_NEGATION",
+                "status": "KILLED",
+                "line": 45,
+                "column": 9
+              }
+            ]
+          }
+        ],
+        "test_efficacy": 100,
+        "mutations_coverage": 100,
+        "mutants_total": 5,
+        "mutants_killed": 5,
+        "mutants_lived": 0,
+        "mutants_not_viable": 0,
+        "mutants_not_covered": 0,
+        "elapsed_time": 1.11150213,
+        "mutator_statistics": {
+          "conditionals_negation": 5
+        }
+      }
+    }
+  ]
+}

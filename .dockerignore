@@ -3,6 +3,7 @@
 .env
 .env.example
 .tripgo
+.serena
 .golangci.yml
 oapi-codegen.yaml
 environment.toml
